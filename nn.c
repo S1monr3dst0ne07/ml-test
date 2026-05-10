@@ -66,6 +66,7 @@ layer_t nn_create_layer(size_t prev, size_t this)
 typedef struct 
 {
     size_t* layers_conf;
+    size_t  layers_conf_count;
 
     size_t count;
     layer_t* ls;
@@ -100,7 +101,8 @@ net_t nn_create_net(size_t layers_conf[], size_t layer_count)
 
     return (net_t) {
         .layers_conf = layer_conf_cpy,
-        .count = layer_count,
+        .layers_conf_count = layer_count,
+        .count = layer_count-1,
         .ls = ls,
         .input_count  = layers_conf[0],
         .output_count = layers_conf[layer_count-1],
@@ -112,7 +114,7 @@ net_t nn_create_net(size_t layers_conf[], size_t layer_count)
 
 
 
-inline void nn_fcpy(float* dst, float* src, size_t n)
+static inline void nn_fcpy(float* dst, float* src, size_t n)
 {
     memcpy(dst, src, n * sizeof(float));
 }
@@ -133,7 +135,9 @@ void nn_forward(net_t net, float* input, float* output)
             float sum = neuron.bias;
 
             for (size_t conn_i = 0; conn_i < neuron.weights_count; conn_i++)
+            {
                 sum += neuron.weights[conn_i] * net.src[conn_i];
+            }
 
             net.dst[neu_i] = NN_ACT_FUNC(sum);
         }
@@ -185,12 +189,12 @@ float nn_cost(net_t n, train_data_t d)
     float error = 0.0f;
     for (size_t i = 0; i < d.count; i++)
     {
-        data_point_t* p = d.data;
-        nn_forward(n, p->inputs, d.scratch_output);
+        data_point_t p = d.data[i];
+        nn_forward(n, p.inputs, d.scratch_output);
 
         for (size_t j = 0; j < d.output_count; j++)
         {
-            float delta = d.scratch_output[j] - p->outputs[j];
+            float delta = d.scratch_output[j] - p.outputs[j];
             error += delta * delta;
         }
     }
@@ -202,7 +206,7 @@ float nn_cost(net_t n, train_data_t d)
 net_t nn_yiff(net_t net, train_data_t d, float eps)
 {
     float c = nn_cost(net, d);
-    net_t grad = nn_create_net(net.layers_conf, net.count);
+    net_t grad = nn_create_net(net.layers_conf, net.layers_conf_count);
 
     for (size_t layer_i = 0; layer_i < net.count; layer_i++)
     {
@@ -211,19 +215,19 @@ net_t nn_yiff(net_t net, train_data_t d, float eps)
 
         for (size_t neu_i = 0; neu_i < net_layer.count; neu_i++)
         {
-            neuron_t net_neuron  = net_layer.ns[neu_i];
-            neuron_t grad_neuron = grad_layer.ns[neu_i];
+            neuron_t* net_neuron  = &net_layer.ns[neu_i];
+            neuron_t* grad_neuron = &grad_layer.ns[neu_i];
 
-            for (size_t weight_i = 0; weight_i < net_neuron.weights_count; weight_i++)
+            for (size_t weight_i = 0; weight_i < net_neuron->weights_count; weight_i++)
             {
-                net_neuron.weights[weight_i] += eps;
-                grad_neuron.weights[weight_i] = (nn_cost(net, d) - c) / eps;
-                net_neuron.weights[weight_i] -= eps;
+                net_neuron->weights[weight_i] += eps;
+                grad_neuron->weights[weight_i] = (nn_cost(net, d) - c) / eps;
+                net_neuron->weights[weight_i] -= eps;
             }
 
-            net_neuron.bias += eps;
-            grad_neuron.bias = (nn_cost(net, d) - c) / eps;
-            net_neuron.bias -= eps;
+            net_neuron->bias += eps;
+            grad_neuron->bias = (nn_cost(net, d) - c) / eps;
+            net_neuron->bias -= eps;
         }
     }
 
@@ -240,13 +244,13 @@ void nn_learn(net_t net, net_t grad, float rate)
 
         for (size_t neu_i = 0; neu_i < net_layer.count; neu_i++)
         {
-            neuron_t net_neuron  = net_layer.ns[neu_i];
-            neuron_t grad_neuron = grad_layer.ns[neu_i];
+            neuron_t* net_neuron  = &net_layer.ns[neu_i];
+            neuron_t* grad_neuron = &grad_layer.ns[neu_i];
 
-            for (size_t weight_i = 0; weight_i < net_neuron.weights_count; weight_i++)
-                net_neuron.weights[weight_i] -= grad_neuron.weights[weight_i] * rate;
+            for (size_t weight_i = 0; weight_i < net_neuron->weights_count; weight_i++)
+                net_neuron->weights[weight_i] -= grad_neuron->weights[weight_i] * rate;
 
-            net_neuron.bias -= grad_neuron.bias * rate;
+            net_neuron->bias -= grad_neuron->bias * rate;
         }
     }
 }

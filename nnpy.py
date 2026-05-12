@@ -98,5 +98,23 @@ class TrainData:
         )
 
 
+main.srand.restype = None
+main.srand.argtypes = (ctypes.c_int,)
+def seed(x):
+    main.srand(x)
+
+
+main.nn_create_net.restype = net_t
+main.nn_create_net.argtypes = (ctypes.POINTER(ctypes.c_size_t),)
+def create_net(config : list[int]):
+    config.append(0)
+
+    config_c = (ctypes.c_size_t * len(config))(*config)
+    return main.nn_create_net(config_c)
+
+
+
+
+
 
 

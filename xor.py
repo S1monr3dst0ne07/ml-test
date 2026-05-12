@@ -2,6 +2,7 @@
 
 from nn import nnpy
 import time
+import json
 
 train = nnpy.TrainData(points = [
     nnpy.DataPoint([0.0, 0.0], [0.0]),
@@ -33,5 +34,7 @@ for point in train.points:
     print(f"{x} | {y} = {output}")
 
 
+with open('xor.json', 'w') as f:
+    json.dump(net.json(), f, indent=2)
 
 

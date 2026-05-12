@@ -15,10 +15,10 @@ class data_point_t(ctypes.Structure):
 
 class train_data_t(ctypes.Structure):
     _fields_ = (
-        ('input_count',   ctypes.c_size_t),
-        ('outputs_count', ctypes.c_size_t),
-        ('count',         ctypes.c_size_t),
-        ('data',          ctypes.POINTER(data_point_t)),
+        ('input_count',  ctypes.c_size_t),
+        ('output_count', ctypes.c_size_t),
+        ('count',        ctypes.c_size_t),
+        ('data',         ctypes.POINTER(data_point_t)),
     )
 
 class neuron_t(ctypes.Structure):
@@ -106,11 +106,35 @@ def seed(x):
 
 main.nn_create_net.restype = net_t
 main.nn_create_net.argtypes = (ctypes.POINTER(ctypes.c_size_t),)
-def create_net(config : list[int]):
+def create_net(config : list[int]) -> net_t:
     config.append(0)
 
-    config_c = (ctypes.c_size_t * len(config))(*config)
-    return main.nn_create_net(config_c)
+    return main.nn_create_net(
+        (ctypes.c_size_t * len(config))(*config)
+    )
+
+main.nn_train.restype = ctypes.c_float
+main.nn_train.argtypes = (net_t, train_data_t, ctypes.c_float)
+def train(net : net_t, td : train_data_t, rate : float) -> float:
+    return main.nn_train(net, td, rate)
+
+
+main.nn_loss.restype = ctypes.c_float
+main.nn_loss.argtypes = (net_t, train_data_t, ctypes.c_float)
+def loss(net : net_t, td : train_data_t) -> float:
+    return main.nn_loss(net, td)
+
+
+main.nn_forward.restype = ctypes.POINTER(ctypes.c_float)
+main.nn_forward.argtypes = (net_t, ctypes.POINTER(ctypes.c_float))
+def forward(net : net_t, inputs : list[float]) -> list[float]:
+    output = main.nn_forward(
+        net,
+        (ctypes.c_float * len(inputs))(*inputs)
+    )
+
+    return output
+
 
 
 

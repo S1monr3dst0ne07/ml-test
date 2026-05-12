@@ -30,11 +30,26 @@ class neuron_t(ctypes.Structure):
         ('weights',       ctypes.POINTER(ctypes.c_float)),
     )
 
+    def json(self):
+        return {
+            'bias': self.bias,
+            'weights': [
+                self.weights[i] for i 
+                in range(self.weights_count)
+            ]
+        }
+
 class layer_t(ctypes.Structure):
     _fields_ = (
         ('count', ctypes.c_size_t),
         ('ns',    ctypes.POINTER(neuron_t)),
     )
+
+    def json(self):
+        return [
+            self.ns[i].json() for i 
+            in range(self.count)
+        ]
 
 class net_t(ctypes.Structure):
     _fields_ = (
@@ -45,6 +60,13 @@ class net_t(ctypes.Structure):
         ('output_count',  ctypes.c_size_t),
         ('output_buffer', ctypes.POINTER(ctypes.c_float)),
     )
+
+    def json(self):
+        return [
+            self.ls[i].json() for i 
+            in range(self.count)
+        ]
+
 
 
 

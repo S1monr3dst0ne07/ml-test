@@ -105,6 +105,11 @@ net_t nn_create_net(size_t layers_conf[])
     size_t input_count  = layers_conf[0];
     size_t output_count = layers_conf[layer_count-1];
 
+    //purely cosmetic: set input biases to zero
+    for (size_t i = 0; i < input_count; i++)
+        ls[0].ns[i].bias = 0;
+        
+
     return (net_t) {
         .layers_conf = layers_conf,
         .count = layer_count,

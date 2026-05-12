@@ -82,6 +82,9 @@ typedef struct
 
     size_t input_count;
     size_t output_count;
+
+    float* output_buffer;
+    // prealloc'd output buffer
 } net_t;
 
 
@@ -99,18 +102,22 @@ net_t nn_create_net(size_t layers_conf[])
             layers_conf[i]
         );
 
+    size_t input_count  = layers_conf[0];
+    size_t output_count = layers_conf[layer_count-1];
+
     return (net_t) {
         .layers_conf = layers_conf,
         .count = layer_count,
         .ls = ls,
-        .input_count  = layers_conf[0],
-        .output_count = layers_conf[layer_count-1],
+        .input_count  = input_count,
+        .output_count = output_count,
+        .output_buffer = malloc(sizeof(float) * output_count),
     };
 }
 
 
 
-void nn_forward(net_t net, float* input, float* output)
+float* nn_forward(net_t net, float* input)
 {
     for (size_t i = 0; i < net.input_count; i++)
         net.ls[0].ns[i].act = input[i];
@@ -138,10 +145,10 @@ void nn_forward(net_t net, float* input, float* output)
         }
     }
 
-    if (output == NULL) return;
-
     for (size_t i = 0; i < net.input_count; i++)
-        output[i] = net.ls[net.count-1].ns[i].act;
+        net.output_buffer[i] = net.ls[net.count-1].ns[i].act;
+
+    return net.output_buffer;
 }
 
 
@@ -162,15 +169,13 @@ typedef struct
     size_t input_count;
     size_t output_count;
 
-    float* scratch_output;
-
     size_t count;
     data_point_t* data;
 } train_data_t;
 
 
 
-float nn_cost(net_t n, train_data_t d)
+float nn_loss(net_t n, train_data_t d)
 {
     assert(n.input_count  == d.input_count);
     assert(n.output_count == d.output_count);
@@ -179,12 +184,12 @@ float nn_cost(net_t n, train_data_t d)
     for (size_t i = 0; i < d.count; i++)
     {
         data_point_t p = d.data[i];
-        nn_forward(n, p.inputs, d.scratch_output);
+        float* prediction = nn_forward(n, p.inputs);
 
         for (size_t j = 0; j < d.output_count; j++)
         {
-            float delta = d.scratch_output[j] - p.outputs[j];
-            error += delta * delta;
+            float diff = prediction[j] - p.outputs[j];
+            error += diff * diff;
         }
     }
 
@@ -192,61 +197,80 @@ float nn_cost(net_t n, train_data_t d)
 }
 
 
-net_t nn_yiff(net_t net, train_data_t d, float eps)
+
+// computes backwards deltas for a single sample
+void nn_backward(net_t net, data_point_t dp)
 {
-    float c = nn_cost(net, d);
-    net_t grad = nn_create_net(net.layers_conf);
-
-    for (size_t layer_i = 1; layer_i < net.count; layer_i++)
+    // compute output layer deltas
+    layer_t* output = &net.ls[net.count-1];
+    for (size_t i = 0; i < output->count; i++)
     {
-        layer_t net_layer  = net.ls[layer_i];
-        layer_t grad_layer = grad.ls[layer_i];
+        neuron_t* n = &output->ns[i];
+        float error = n->act - dp.outputs[i];
+        n->delta = error * NN_ACT_DERI(n->act);
+    }
 
-        for (size_t neu_i = 0; neu_i < net_layer.count; neu_i++)
+    for (size_t i = net.count-2; i > 0; i--)
+    {
+        layer_t* curr_layer = &net.ls[i];
+        layer_t* next_layer = &net.ls[i+1];
+
+        for (size_t j = 0; j < curr_layer->count; j++)
         {
-            neuron_t* net_neuron  = &net_layer.ns[neu_i];
-            neuron_t* grad_neuron = &grad_layer.ns[neu_i];
+            neuron_t* curr = &curr_layer->ns[j];
+            float downstream = 0.0f;
 
-            for (size_t weight_i = 0; weight_i < net_neuron->weights_count; weight_i++)
+            for (size_t k = 0; k < next_layer->count; k++)
             {
-                net_neuron->weights[weight_i] += eps;
-                grad_neuron->weights[weight_i] = (nn_cost(net, d) - c) / eps;
-                net_neuron->weights[weight_i] -= eps;
+                neuron_t* next = &next_layer->ns[k];
+                downstream += next->weights[j] * next->delta;
             }
 
-            net_neuron->bias += eps;
-            grad_neuron->bias = (nn_cost(net, d) - c) / eps;
-            net_neuron->bias -= eps;
+             curr->delta = downstream * NN_ACT_DERI(curr->act);
         }
     }
-
-    return grad;
 }
 
 
-
-
-
-void nn_learn(net_t net, net_t grad, float rate)
+void nn_gradient(net_t net, float rate)
 {
-    for (size_t layer_i = 0; layer_i < net.count; layer_i++)
+    for (size_t i = 1; i < net.count; i++)
     {
-        layer_t net_layer  = net.ls[layer_i];
-        layer_t grad_layer = grad.ls[layer_i];
+        layer_t* prev_layer = &net.ls[i-1];
+        layer_t* curr_layer = &net.ls[i];
 
-        for (size_t neu_i = 0; neu_i < net_layer.count; neu_i++)
+        for (size_t j = 0; j < curr_layer->count; j++)
         {
-            neuron_t* net_neuron  = &net_layer.ns[neu_i];
-            neuron_t* grad_neuron = &grad_layer.ns[neu_i];
+            neuron_t* n = &curr_layer->ns[j];
 
-            for (size_t weight_i = 0; weight_i < net_neuron->weights_count; weight_i++)
-                net_neuron->weights[weight_i] -= grad_neuron->weights[weight_i] * rate;
+            for (size_t w = 0; w < n->weights_count; w++)
+                n->weights[w] -= rate * n->delta * prev_layer->ns[w].act;
 
-            net_neuron->bias -= grad_neuron->bias * rate;
+            n->bias -= rate * n->delta;
         }
     }
 }
 
 
+float nn_train(net_t net, train_data_t train, float rate)
+{
+    float total_loss = 0.0f;
 
+    for (size_t i = 0; i < train.count; i++)
+    {
+        data_point_t dp = train.data[i];
+        float* output = nn_forward(net, dp.inputs);
 
+        //compute loss MSE
+        for (size_t j = 0; j < train.output_count; j++)
+        {
+            float diff = output[j] - dp.outputs[j];
+            total_loss += diff * diff;
+        }
+
+        nn_backward(net, dp);
+        nn_gradient(net, rate);
+    }
+
+    return total_loss;
+}

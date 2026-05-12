@@ -13,7 +13,6 @@ train_data_t d = {
         { .inputs = (float[]){ 1.0f, 1.0f }, .outputs = (float[]){ 0.0f } },
     },
     .count = 4,
-    .scratch_output = (float[4]){ 0 },
     .input_count = 2,
     .output_count = 1,
 };
@@ -30,12 +29,14 @@ int main()
 
     net_t n = nn_create_net((size_t[]){2, 2, 1, 0});
 
-    for (int i = 0; i < 100000; i++)
+    for (int i = 0; i < 10000; i++)
     {
-        net_t grad = nn_yiff(n, d, eps);
-        nn_learn(n, grad, rate);
+        float loss = nn_train(n, d, rate);
+        if (i % 1000 == 0)
+            printf("loss: %f\n", loss);
     }
-    float c = nn_cost(n, d);
+
+    float c = nn_loss(n, d);
     printf("cost: %f\n", c);
 
 
@@ -43,8 +44,8 @@ int main()
     for (size_t i = 0; i < d.count; i++)
     {
         data_point_t dp = d.data[i];
-        nn_forward(n, dp.inputs, d.scratch_output);
-        printf("%f | %f = %f\n", dp.inputs[0], dp.inputs[1], d.scratch_output[0]);
+        float* output = nn_forward(n, dp.inputs);
+        printf("%f | %f = %f\n", dp.inputs[0], dp.inputs[1], output[0]);
     }
 
     return 0; 

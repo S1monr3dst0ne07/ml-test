@@ -272,5 +272,5 @@ float nn_train(net_t net, train_data_t train, float rate)
         nn_gradient(net, rate);
     }
 
-    return total_loss;
+    return total_loss / train.count;
 }

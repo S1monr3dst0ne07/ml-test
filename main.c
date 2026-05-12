@@ -10,7 +10,7 @@ train_data_t d = {
         { .inputs = (float[]){ 0.0f, 0.0f }, .outputs = (float[]){ 0.0f } },
         { .inputs = (float[]){ 1.0f, 0.0f }, .outputs = (float[]){ 1.0f } },
         { .inputs = (float[]){ 0.0f, 1.0f }, .outputs = (float[]){ 1.0f } },
-        { .inputs = (float[]){ 1.0f, 1.0f }, .outputs = (float[]){ 1.0f } },
+        { .inputs = (float[]){ 1.0f, 1.0f }, .outputs = (float[]){ 0.0f } },
     },
     .count = 4,
     .scratch_output = (float[4]){ 0 },
@@ -26,10 +26,9 @@ const float rate = 1;
 int main()
 {
 
-    srand(0);
+    srand(time(0));
 
-    //net_t n = nn_create_net((size_t[]){2, 2, 1}, 3);
-    net_t n = nn_create_net((size_t[]){2, 1}, 2);
+    net_t n = nn_create_net((size_t[]){2, 2, 1, 0});
 
     for (int i = 0; i < 100000; i++)
     {

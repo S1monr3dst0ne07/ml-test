@@ -14,13 +14,21 @@ float nn_sigmoidf(float x)
 {
     return 1.0f / (1.0f + expf(-x));
 }
+float nn_dsigmoidf(float y)
+{
+    return y * (1 - y);
+}
 
 #define NN_ACT_FUNC nn_sigmoidf
+#define NN_ACT_DERI nn_dsigmoidf
 
 
 
 typedef struct
 {
+    float act;
+    float delta;
+
     float  bias;
     size_t weights_count;
     float* weights;
@@ -65,94 +73,75 @@ layer_t nn_create_layer(size_t prev, size_t this)
 
 typedef struct 
 {
-    size_t* layers_conf;
-    size_t  layers_conf_count;
+    size_t* layers_conf; 
+    // -external, don't dealloc
+    // -null terminated
 
     size_t count;
     layer_t* ls;
 
     size_t input_count;
     size_t output_count;
-
-    //activation buffers 
-    size_t width;
-    float* src;
-    float* dst;
 } net_t;
 
 
 
-net_t nn_create_net(size_t layers_conf[], size_t layer_count)
+net_t nn_create_net(size_t layers_conf[])
 {
+    size_t layer_count = 0;
+    while (layers_conf[layer_count]) layer_count++;
+
     layer_t * ls = malloc(sizeof(layer_t) * layer_count);
 
-    for (size_t i = 0; i < layer_count-1; i++)
-        ls[i] = nn_create_layer(layers_conf[i], layers_conf[i+1]);
-
-    size_t width = 0;
     for (size_t i = 0; i < layer_count; i++)
-        if (width < layers_conf[i]) width = layers_conf[i];
-
-    float* b1 = malloc(sizeof(float) * width);
-    float* b2 = malloc(sizeof(float) * width);
-
-    size_t* layer_conf_cpy = malloc(sizeof(size_t) * layer_count);
-    memcpy(layer_conf_cpy, layers_conf, sizeof(size_t) * layer_count);
+        ls[i] = nn_create_layer(
+            i > 0 ? layers_conf[i-1] : 0, //input neurons don't have weights
+            layers_conf[i]
+        );
 
     return (net_t) {
-        .layers_conf = layer_conf_cpy,
-        .layers_conf_count = layer_count,
-        .count = layer_count-1,
+        .layers_conf = layers_conf,
+        .count = layer_count,
         .ls = ls,
         .input_count  = layers_conf[0],
         .output_count = layers_conf[layer_count-1],
-        .width = width,
-        .src = b1,
-        .dst = b2,
     };
-}
-
-
-
-static inline void nn_fcpy(float* dst, float* src, size_t n)
-{
-    memcpy(dst, src, n * sizeof(float));
 }
 
 
 
 void nn_forward(net_t net, float* input, float* output)
 {
-    nn_fcpy(net.src, input, net.input_count);
+    for (size_t i = 0; i < net.input_count; i++)
+        net.ls[0].ns[i].act = input[i];
 
-    for (size_t layer_i = 0; layer_i < net.count; layer_i++)
+    for (size_t layer_i = 1; layer_i < net.count; layer_i++)
+        //skip input layer
     {
-        layer_t layer = net.ls[layer_i];
+        layer_t* prev_layer = &net.ls[layer_i-1];
+        layer_t* curr_layer = &net.ls[layer_i];
 
-        for (size_t neu_i = 0; neu_i < layer.count; neu_i++)
+        for (size_t neu_i = 0; neu_i < curr_layer->count; neu_i++)
         {
-            neuron_t neuron = layer.ns[neu_i];
-            float sum = neuron.bias;
+            neuron_t* curr_neuron = &curr_layer->ns[neu_i];
+            float sum = curr_neuron->bias;
 
-            for (size_t conn_i = 0; conn_i < neuron.weights_count; conn_i++)
+            assert(prev_layer->count == curr_neuron->weights_count);
+
+            for (size_t conn_i = 0; conn_i < prev_layer->count; conn_i++)
             {
-                sum += neuron.weights[conn_i] * net.src[conn_i];
+                neuron_t* prev_neuron = &prev_layer->ns[conn_i];
+                sum += curr_neuron->weights[conn_i] * prev_neuron->act;
             }
 
-            net.dst[neu_i] = NN_ACT_FUNC(sum);
+            curr_neuron->act = NN_ACT_FUNC(sum); 
         }
-
-        // pointer swap
-        float* src_ptr = net.src;
-        float* dst_ptr = net.dst;
-
-        net.src = dst_ptr;
-        net.dst = src_ptr;
     }
 
-    // read from source because it's been pointer swapped.
-    // never used net.dst!!!
-    nn_fcpy(output, net.src, net.output_count);
+    if (output == NULL) return;
+
+    for (size_t i = 0; i < net.input_count; i++)
+        output[i] = net.ls[net.count-1].ns[i].act;
 }
 
 
@@ -206,9 +195,9 @@ float nn_cost(net_t n, train_data_t d)
 net_t nn_yiff(net_t net, train_data_t d, float eps)
 {
     float c = nn_cost(net, d);
-    net_t grad = nn_create_net(net.layers_conf, net.layers_conf_count);
+    net_t grad = nn_create_net(net.layers_conf);
 
-    for (size_t layer_i = 0; layer_i < net.count; layer_i++)
+    for (size_t layer_i = 1; layer_i < net.count; layer_i++)
     {
         layer_t net_layer  = net.ls[layer_i];
         layer_t grad_layer = grad.ls[layer_i];
@@ -233,6 +222,9 @@ net_t nn_yiff(net_t net, train_data_t d, float eps)
 
     return grad;
 }
+
+
+
 
 
 void nn_learn(net_t net, net_t grad, float rate)

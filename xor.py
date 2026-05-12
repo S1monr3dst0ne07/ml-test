@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import nnpy
+from nn import nnpy
 import time
 
 train = nnpy.TrainData(points = [

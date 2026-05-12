@@ -226,7 +226,7 @@ void nn_backward(net_t net, data_point_t dp)
                 downstream += next->weights[j] * next->delta;
             }
 
-             curr->delta = downstream * NN_ACT_DERI(curr->act);
+            curr->delta = downstream * NN_ACT_DERI(curr->act);
         }
     }
 }

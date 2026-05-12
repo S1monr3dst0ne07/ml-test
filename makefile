@@ -1,6 +1,4 @@
 
+ll:
+	gcc -shared -fPIC nn.c -o nn.so -lm
 
-
-run:
-	gcc -g -Wall -o main main.c -lm
-	./main

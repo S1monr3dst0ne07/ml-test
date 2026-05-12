@@ -120,7 +120,7 @@ def train(net : net_t, td : train_data_t, rate : float) -> float:
 
 
 main.nn_loss.restype = ctypes.c_float
-main.nn_loss.argtypes = (net_t, train_data_t, ctypes.c_float)
+main.nn_loss.argtypes = (net_t, train_data_t)
 def loss(net : net_t, td : train_data_t) -> float:
     return main.nn_loss(net, td)
 

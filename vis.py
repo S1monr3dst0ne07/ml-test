@@ -6,7 +6,7 @@ set_window_state(FLAG_WINDOW_RESIZABLE)
 init_window(800, 450, "Hello")
 
 import json
-with open('comp.json', 'r') as f:
+with open('8.json', 'r') as f:
     net = json.load(f)
 
 print(net)
@@ -89,8 +89,8 @@ while not window_should_close():
                     p = int(((act / 2) + 0.5) * 255)
                     color = (p, p, p, 255)
                     draw_pixel(
-                        ox + x,
-                        oy + y,
+                        x + oy,
+                        y + ox,
                         color
                     )
 

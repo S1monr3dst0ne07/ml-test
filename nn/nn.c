@@ -256,6 +256,15 @@ void nn_gradient(net_t net, float rate)
     }
 }
 
+float nn_delta(net_t net)
+{
+    float sum = 0.0;
+    for (size_t i = 0; i < net.count; i++)
+    for (size_t j = 0; j < net.ls[i].count; j++)
+        sum += fabsf(net.ls[i].ns[j].delta);
+    return sum;
+}
+
 
 float nn_train(net_t net, train_data_t train, float rate)
 {

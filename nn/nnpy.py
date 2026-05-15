@@ -154,6 +154,10 @@ def forward(net : net_t, inputs : list[float]) -> list[float]:
     return output
 
 
+main.nn_delta.restype = ctypes.c_float
+main.nn_delta.argtypes = (net_t,)
+def delta(net : net_t):
+    return main.nn_delta(net)
 
 
 

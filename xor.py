@@ -3,6 +3,7 @@
 from nn import nnpy
 import time
 import json
+import random
 
 train = nnpy.TrainData(points = [
     nnpy.DataPoint([0.0, 0.0], [0.0]),
@@ -11,7 +12,7 @@ train = nnpy.TrainData(points = [
     nnpy.DataPoint([1.0, 1.0], [0.0]),
 ])
 
-nnpy.seed(time.time_ns())
+random.seed(time.time_ns())
 
 rate = 10
 net = nnpy.create_net([2, 2, 1])
@@ -21,7 +22,7 @@ for i in range(10000):
     loss = nnpy.train(net, loaded_train, rate)
 
     if i % 1000 == 0:
-        print(f"epoch: {i}, loss: {loss}")
+        print(f"epoch: {i}, loss: {loss}, delta: {nnpy.delta(net)}")
 
 cost = nnpy.loss(net, loaded_train)
 print(f"cost: {cost}")

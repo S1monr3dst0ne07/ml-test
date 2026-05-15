@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass as dc
 import random
+from nn import nnpy
 
 
 @dc
@@ -28,12 +29,12 @@ class petri:
         def __iter__(self):
             return iter(self.conns)
 
-    places      : dict[tuple[int,int], place]
-    transitions : dict[tuple[int,int], transition]
-
+    places      : dict[tuple[int,int    ], place]
+    transitions : dict[tuple[int,int,int], transition]
+    limit : int
 
     @classmethod
-    def make(cls, x=4, y=4, n=2):
+    def make(cls, x, y, n, limit):
         places = {}
         transitions = {}
 
@@ -53,7 +54,7 @@ class petri:
                     conns = [cls.conn(places[coord]) for coord in coords]
                     transitions[(xi, yi, ni)] = cls.transition(conns)
 
-        return cls(places, transitions)
+        return cls(places, transitions, limit)
                 
     def step(self):
         # forward pass
@@ -73,34 +74,95 @@ class petri:
             place.tokens += place._buffer
             place.tokens -= place._detractor
 
+            place.tokens = min(place.tokens, self.limit)
+
             place._buffer = 0
             place._detractor = 0
 
 
 
 
-def sample(selection, size=10): 
-    n = petri.make()
-    n.places[(0, 0)].tokens = 1
+
+
+pn_width  = 2
+pn_height = 2
+pn_breath = 1
+
+sample_size = 10
+token_limit = 10
+config_size = pn_width * pn_height * pn_breath * 4 * 2
+
+distri = [0, 0, 0, 1]
+rate = 1e-5
+
+
+def embed(pn):
+    vector = []
+    for x in range(pn_width-1):
+        for y in range(pn_height-1):
+            for n in range(pn_breath):
+                trans = pn.transitions[(x, y, n)]
+                for d in range(4):
+                    vector.append(trans.conns[d].activation / token_limit)
+                    vector.append(trans.conns[d].receive    / token_limit)
+
+    return vector
+
+def disembed(vector):
+    pn = petri.make(pn_width, pn_height, pn_breath, token_limit)
+    for x in range(pn_width-1):
+        for y in range(pn_height-1):
+            for n in range(pn_breath):
+                trans = pn.transitions[(x, y, n)]
+                for d in range(4):
+                    trans.conns[d].activation = int(vector.pop(0) * token_limit)
+                    trans.conns[d].receive    = int(vector.pop(0) * token_limit)
+
+    return pn
+
+
+
+def sample(): 
+    pn = petri.make(pn_width, pn_height, pn_breath, token_limit)
+    pn.places[(0, 0)].tokens = 1
 
     # randomize weights
-    for trans in n.transitions.values():
+    for trans in pn.transitions.values():
         for conn in trans.conns:
-            conn.activation = random.choice(selection)
-            conn.receive    = random.choice(selection)
+            conn.activation = random.choice(distri)
+            conn.receive    = random.choice(distri)
+
+    # !!! HYPERPARAMETER !!!
+    prope_coord = (pn_width-1, pn_height-1)
 
     # record sample
     sample = []
-    for _ in range(size):
-        n.step()
-        v = n.places[(3, 3)].tokens
+    for _ in range(sample_size):
+        pn.step()
+        v = pn.places[prope_coord].tokens
         sample.append(v)
 
-    return sample
+    return nnpy.DataPoint(
+        [x / token_limit for x in sample],
+        embed(pn),
+    )
 
 
-s = sample([0, 0, 0, 1])
-print(s)
+def batch(batch_size=200):
+    return nnpy.TrainData(points = [
+        sample() for _ in range(batch_size)
+    ])
+
+nn = nnpy.create_net([sample_size, 20, 20, 40, config_size])
+
+i = 0
+while True:
+    train = batch().load()
+    for _ in range(10):
+        loss = nnpy.train(nn, train, rate)
+        print(f'epoch: {i}, loss: {loss}')
+
+    i += 1
 
 
 

@@ -3,7 +3,10 @@
 from dataclasses import dataclass as dc
 import random
 from nn import nnpy
+import time
+import numpy as np
 
+random.seed(time.time_ns())
 
 @dc
 class petri:
@@ -84,16 +87,16 @@ class petri:
 
 
 
-pn_width  = 2
-pn_height = 2
-pn_breath = 1
+pn_width  = 3
+pn_height = 3
+pn_breath = 2
 
 sample_size = 10
 token_limit = 10
 config_size = pn_width * pn_height * pn_breath * 4 * 2
 
-distri = [0, 0, 0, 1]
-rate = 1e-5
+distri = [0, 0, 1]
+rate = 1e-2
 
 
 def embed(pn):
@@ -122,7 +125,7 @@ def disembed(vector):
 
 
 
-def sample(): 
+def generate(): 
     pn = petri.make(pn_width, pn_height, pn_breath, token_limit)
     pn.places[(0, 0)].tokens = 1
 
@@ -142,27 +145,43 @@ def sample():
         v = pn.places[prope_coord].tokens
         sample.append(v)
 
-    return nnpy.DataPoint(
-        [x / token_limit for x in sample],
-        embed(pn),
-    )
+    return sample, embed(pn)
 
 
-def batch(batch_size=200):
-    return nnpy.TrainData(points = [
-        sample() for _ in range(batch_size)
-    ])
+def batch(batch_size):
+    points = []
+    while len(points) < batch_size:
+        sample, vector = generate()
+        if all(x == 0 for x in sample):
+            continue
 
-nn = nnpy.create_net([sample_size, 20, 20, 40, config_size])
+        points.append(nnpy.DataPoint(
+            [x / token_limit for x in sample],
+            vector
+        ))
+
+    return nnpy.TrainData(points = points)
+
+nn = nnpy.create_net([sample_size, 20, 20, 20, config_size])
 
 i = 0
+batch_size = 200
+train = batch(batch_size).load()
 while True:
-    train = batch().load()
-    for _ in range(10):
-        loss = nnpy.train(nn, train, rate)
-        print(f'epoch: {i}, loss: {loss}')
+    losses = []
+    for _ in range(100):
+        losses.append(nnpy.train(nn, train, rate))
+        i += 1
 
-    i += 1
+    loss = np.average(losses)
+    if loss < 0.01:
+        train = batch(batch_size).load()
+        print("--- new batch ---")
+
+    delta = nnpy.delta(nn)
+    print(f'epoch: {i}, loss: {loss}, delta: {delta}')
+
+
 
 
 

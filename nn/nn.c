@@ -3,7 +3,7 @@
 #include <math.h>
 #include <string.h>
 #include <assert.h>
-
+#include <stdint.h>
 
 
 float nn_rand_float()
@@ -35,15 +35,19 @@ typedef struct
 } neuron_t;
 
 
-neuron_t nn_create_neuron(size_t conn)
+neuron_t nn_create_neuron(size_t conn, uint32_t fan_out, uint32_t fan_in)
 {
     float* weight = malloc(sizeof(float) * conn);
 
     for (size_t i = 0; i < conn; i++)
-        weight[i] = nn_rand_float();
+    {
+        // xavier init
+        float std = sqrtf(2.0f / (fan_in + fan_out));
+        weight[i] = nn_rand_float() * std;
+    }
 
     return (neuron_t) {
-        .bias = nn_rand_float(),
+        .bias = 0.0f,
         .weights_count = conn,
         .weights = weight
     };
@@ -62,7 +66,7 @@ layer_t nn_create_layer(size_t prev, size_t this)
     neuron_t* ns = malloc(sizeof(neuron_t) * this);
 
     for (size_t i = 0; i < this; i++)
-        ns[i] = nn_create_neuron(prev);
+        ns[i] = nn_create_neuron(prev, prev, this);
 
     return (layer_t) {
         .count = this,

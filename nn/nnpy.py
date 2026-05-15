@@ -1,3 +1,4 @@
+from __future__ import annotations
 
 import ctypes
 import os
@@ -119,11 +120,6 @@ class TrainData:
             ])
         )
 
-
-main.srand.restype = None
-main.srand.argtypes = (ctypes.c_int,)
-def seed(x):
-    main.srand(x)
 
 
 main.nn_create_net.restype = net_t
